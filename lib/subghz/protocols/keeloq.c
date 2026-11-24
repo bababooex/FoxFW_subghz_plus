@@ -90,6 +90,8 @@ typedef struct {
     __typeof__(&subghz_protocol_keeloq_common_decrypt_aerf) subghz_protocol_keeloq_common_decrypt_aerf;
     __typeof__(&subghz_protocol_keeloq_common_encrypt) subghz_protocol_keeloq_common_encrypt;
     __typeof__(&subghz_protocol_keeloq_common_learning_aerf) subghz_protocol_keeloq_common_learning_aerf;
+    __typeof__(&subghz_protocol_keeloq_common_learning_erreka) subghz_protocol_keeloq_common_learning_erreka;
+    __typeof__(&subghz_protocol_keeloq_common_learning_pujol) subghz_protocol_keeloq_common_learning_pujol;
     __typeof__(&subghz_protocol_keeloq_common_magic_serial_type1_learning) subghz_protocol_keeloq_common_magic_serial_type1_learning;
     __typeof__(&subghz_protocol_keeloq_common_magic_serial_type2_learning) subghz_protocol_keeloq_common_magic_serial_type2_learning;
     __typeof__(&subghz_protocol_keeloq_common_magic_serial_type3_learning) subghz_protocol_keeloq_common_magic_serial_type3_learning;
@@ -107,6 +109,8 @@ static const enc_keeloq_host_t enc_keeloq_host = {
     .subghz_protocol_keeloq_common_decrypt_aerf = subghz_protocol_keeloq_common_decrypt_aerf,
     .subghz_protocol_keeloq_common_encrypt = subghz_protocol_keeloq_common_encrypt,
     .subghz_protocol_keeloq_common_learning_aerf = subghz_protocol_keeloq_common_learning_aerf,
+    .subghz_protocol_keeloq_common_learning_erreka = subghz_protocol_keeloq_common_learning_erreka,
+    .subghz_protocol_keeloq_common_learning_pujol = subghz_protocol_keeloq_common_learning_pujol,
     .subghz_protocol_keeloq_common_magic_serial_type1_learning = subghz_protocol_keeloq_common_magic_serial_type1_learning,
     .subghz_protocol_keeloq_common_magic_serial_type2_learning = subghz_protocol_keeloq_common_magic_serial_type2_learning,
     .subghz_protocol_keeloq_common_magic_serial_type3_learning = subghz_protocol_keeloq_common_magic_serial_type3_learning,
@@ -193,7 +197,10 @@ static bool subghz_protocol_keeloq_gen_data(
     if(subghz_block_generic_global_button_override_get(&btn))
         FURI_LOG_D(TAG, "Button sucessfully changed to 0x%X", btn);
 
-    uint32_t fix = (uint32_t)btn << 28 | instance->generic.serial;
+    // Pecinin does not transmit the button code in fix - only the bare serial.
+    uint32_t fix = (strcmp(instance->manufacture_name, "Pecinin") == 0) ?
+                       instance->generic.serial :
+                       (uint32_t)btn << 28 | instance->generic.serial;
     uint32_t hop = 0;
     uint64_t man = 0;
     uint64_t code_found_reverse;
@@ -356,6 +363,7 @@ static bool subghz_protocol_keeloq_gen_data(
                 (strcmp(instance->manufacture_name, "DTM_Neo") == 0) ||
                 (strcmp(instance->manufacture_name, "FAAC_RC,XT") == 0) ||
                 (strcmp(instance->manufacture_name, "Mutanco_Mutancode") == 0) ||
+                (strcmp(instance->manufacture_name, "Clemsa_Mutancode") == 0) || // alias of Mutanco_Mutancode
                 (strcmp(instance->manufacture_name, "Came_Space") == 0) ||
                 (strcmp(instance->manufacture_name, "Genius_Bravo") == 0) ||
                 (strcmp(instance->manufacture_name, "GSN") == 0) ||
@@ -364,14 +372,19 @@ static bool subghz_protocol_keeloq_gen_data(
                 (strcmp(instance->manufacture_name, "Pecinin") == 0) ||
                 (strcmp(instance->manufacture_name, "Steelmate") == 0) ||
                 (strcmp(instance->manufacture_name, "Cardin_S449") == 0) ||
-                (strcmp(instance->manufacture_name, "Stilmatic") == 0)) {
+                (strcmp(instance->manufacture_name, "Stilmatic") == 0) ||
+                (strcmp(instance->manufacture_name, "Wisniowski") == 0) ||
+                (strcmp(instance->manufacture_name, "ATA_PTX4") == 0) ||
+                (strcmp(instance->manufacture_name, "Fadini") == 0) ||
+                (strcmp(instance->manufacture_name, "Seav") == 0)) {
 
                 decrypt = btn << 28 | (instance->generic.serial & 0xFFF) << 16 |
                           instance->generic.cnt;
             } else if(
                 (strcmp(instance->manufacture_name, "NICE_Smilo") == 0) ||
                 (strcmp(instance->manufacture_name, "NICE_MHOUSE") == 0) ||
-                (strcmp(instance->manufacture_name, "JCM_Tech") == 0)) {
+                (strcmp(instance->manufacture_name, "JCM_Tech") == 0) ||
+                (strcmp(instance->manufacture_name, "Pujol_Vario") == 0)) {
 
                 decrypt = btn << 28 | (instance->generic.serial & 0xFF) << 16 |
                           instance->generic.cnt;
@@ -427,6 +440,18 @@ static bool subghz_protocol_keeloq_gen_data(
                         case KEELOQ_LEARNING_MAGIC_SERIAL_TYPE_1:
 
                             man = subghz_protocol_keeloq_common_magic_serial_type1_learning(
+                                fix, manufacture_code->key);
+                            hop = subghz_protocol_keeloq_common_encrypt(decrypt, man);
+                            break;
+                        case KEELOQ_LEARNING_ERREKA:
+
+                            man = subghz_protocol_keeloq_common_learning_erreka(
+                                fix, instance->generic.seed, manufacture_code->key);
+                            hop = subghz_protocol_keeloq_common_encrypt(decrypt, man);
+                            break;
+                        case KEELOQ_LEARNING_PUJOL:
+
+                            man = subghz_protocol_keeloq_common_learning_pujol(
                                 fix, manufacture_code->key);
                             hop = subghz_protocol_keeloq_common_encrypt(decrypt, man);
                             break;
@@ -554,11 +579,21 @@ void subghz_protocol_decoder_keeloq_feed(void* context, bool level, uint32_t dur
                           subghz_protocol_keeloq_const.te_delta) {
             instance->decoder.parser_step = KeeloqDecoderStepCheckPreambula;
             instance->header_count++;
+        } else if(
+            // Superrollo GW60 (HCS361): 10*Te HIGH sync pulse before the sync gap,
+            // instead of another regular Te preamble pulse.
+            (level) && (instance->header_count > 2) &&
+            (DURATION_DIFF(duration, subghz_protocol_keeloq_const.te_short * 10) <
+             subghz_protocol_keeloq_const.te_delta * 10)) {
+            instance->decoder.parser_step = KeeloqDecoderStepCheckPreambula;
         }
         break;
     case KeeloqDecoderStepCheckPreambula:
-        if((!level) && (DURATION_DIFF(duration, subghz_protocol_keeloq_const.te_short) <
-                        subghz_protocol_keeloq_const.te_delta)) {
+        if((!level) && ((DURATION_DIFF(duration, subghz_protocol_keeloq_const.te_short) <
+                         subghz_protocol_keeloq_const.te_delta) ||
+                        // Superrollo GW60 asymmetric preamble: LOW half is 2*Te, not Te.
+                        (DURATION_DIFF(duration, subghz_protocol_keeloq_const.te_short * 2) <
+                         subghz_protocol_keeloq_const.te_delta))) {
             instance->decoder.parser_step = KeeloqDecoderStepReset;
             break;
         }
@@ -667,6 +702,22 @@ static inline bool subghz_protocol_keeloq_check_decrypt_centurion(
     return false;
 }
 
+/* Pecinin does not transmit the button code in fix (see gen_data's fix
+ * computation above), so there is no btn to compare here - only the 12-bit
+ * serial. The button is instead read back out of the decrypted hop itself
+ * by the caller, same as Pecinin's own TX side folds it into decrypt. */
+static inline bool subghz_protocol_keeloq_check_decrypt_pecinin(
+    SubGhzBlockGeneric* instance,
+    uint32_t decrypt,
+    uint32_t end_serial) {
+    furi_assert(instance);
+    if((((uint16_t)(decrypt >> 16)) & 0xFFF) == end_serial) {
+        instance->cnt = decrypt & 0x0000FFFF;
+        return true;
+    }
+    return false;
+}
+
 static uint32_t subghz_protocol_keeloq_check_remote_controller_selector(
     SubGhzBlockGeneric* instance,
     uint32_t fix,
@@ -693,11 +744,26 @@ static uint32_t subghz_protocol_keeloq_check_remote_controller_selector(
                 case KEELOQ_LEARNING_SIMPLE:
 
                     decrypt = subghz_protocol_keeloq_common_decrypt(hop, manufacture_code->key);
-                    if(subghz_protocol_keeloq_check_decrypt(instance, decrypt, btn, end_serial)) {
-                        *manufacture_name =
-                            subghz_keystore_keep_name(keystore, furi_string_get_cstr(manufacture_code->name));
-                        keystore->mfname = *manufacture_name;
-                        return decrypt;
+                    if(strcmp(furi_string_get_cstr(manufacture_code->name), "Pecinin") == 0) {
+                        // Pecinin has no btn in fix, so end_serial is 12 bits of fix
+                        // itself (not the generic 8-bit end_serial above), and the
+                        // button comes back out of decrypt instead of being compared.
+                        if(subghz_protocol_keeloq_check_decrypt_pecinin(
+                               instance, decrypt, fix & 0xFFF)) {
+                            *manufacture_name =
+                                subghz_keystore_keep_name(keystore, furi_string_get_cstr(manufacture_code->name));
+                            keystore->mfname = *manufacture_name;
+                            instance->btn = decrypt >> 28;
+                            return decrypt;
+                        }
+                    } else {
+                        if(subghz_protocol_keeloq_check_decrypt(
+                               instance, decrypt, btn, end_serial)) {
+                            *manufacture_name =
+                                subghz_keystore_keep_name(keystore, furi_string_get_cstr(manufacture_code->name));
+                            keystore->mfname = *manufacture_name;
+                            return decrypt;
+                        }
                     }
                     break;
                 case KEELOQ_LEARNING_NORMAL:
@@ -835,6 +901,35 @@ static uint32_t subghz_protocol_keeloq_check_remote_controller_selector(
                         return decrypt;
                     }
                     break;
+                case KEELOQ_LEARNING_ERREKA: {
+                    // Erreka (type 12): device key mixes the manufacturer key with the
+                    // remote's seed. Reuses the existing safe common_decrypt primitive,
+                    // no nl_extend involved.
+                    uint64_t man_erreka = subghz_protocol_keeloq_common_learning_erreka(
+                        fix, instance->seed, manufacture_code->key);
+                    decrypt = subghz_protocol_keeloq_common_decrypt(hop, man_erreka);
+                    if(subghz_protocol_keeloq_check_decrypt(instance, decrypt, btn, end_serial)) {
+                        *manufacture_name =
+                            subghz_keystore_keep_name(keystore, furi_string_get_cstr(manufacture_code->name));
+                        keystore->mfname = *manufacture_name;
+                        return decrypt;
+                    }
+                    break;
+                }
+                case KEELOQ_LEARNING_PUJOL: {
+                    // Pujol (type 13): device key derived from fix + manufacturer key,
+                    // then 16-bit-rotated. Also only uses common_decrypt, no nl_extend.
+                    uint64_t man_pujol = subghz_protocol_keeloq_common_learning_pujol(
+                        fix, manufacture_code->key);
+                    decrypt = subghz_protocol_keeloq_common_decrypt(hop, man_pujol);
+                    if(subghz_protocol_keeloq_check_decrypt(instance, decrypt, btn, end_serial)) {
+                        *manufacture_name =
+                            subghz_keystore_keep_name(keystore, furi_string_get_cstr(manufacture_code->name));
+                        keystore->mfname = *manufacture_name;
+                        return decrypt;
+                    }
+                    break;
+                }
                 case KEELOQ_LEARNING_UNKNOWN:
 
                     decrypt = subghz_protocol_keeloq_common_decrypt(hop, manufacture_code->key);
@@ -1020,7 +1115,11 @@ static uint32_t subghz_protocol_keeloq_check_remote_controller(
     }
 
     instance->serial = key_fix & 0x0FFFFFFF;
-    instance->btn = key_fix >> 28;
+    // Pecinin's btn was already resolved from decrypt inside the SIMPLE case
+    // above (fix has no button code to re-extract here).
+    if(strcmp(*manufacture_name, "Pecinin") != 0) {
+        instance->btn = key_fix >> 28;
+    }
 
     if(subghz_custom_btn_get_original() == 0) {
         subghz_custom_btn_set_original(instance->btn);

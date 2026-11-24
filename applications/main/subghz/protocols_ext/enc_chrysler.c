@@ -406,6 +406,18 @@ SubGhzProtocolStatus
         return SubGhzProtocolStatusError;
     }
 
+    /* Persist the advanced counter (and the button actually used) back -
+     * without this, a "Cnt"/"Btn" field left over from an earlier save
+     * would get read back on the NEXT deserialize() (above) and stomp the
+     * freshly-derived value before the +2*mult step, so the counter would
+     * never advance past "original + 2*mult" no matter how many times this
+     * gets sent. */
+    flipper_format_rewind(flipper_format);
+    flipper_format_insert_or_update_uint32(flipper_format, "Cnt", &counter, 1);
+    uint32_t tx_button_save = instance->tx_button;
+    flipper_format_rewind(flipper_format);
+    flipper_format_insert_or_update_uint32(flipper_format, "Btn", &tx_button_save, 1);
+
     instance->encoder.front = 0;
     instance->encoder.is_running = true;
     return status;

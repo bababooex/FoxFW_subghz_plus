@@ -206,16 +206,35 @@ static SubGhzProtocolStatus
     ford_v2_encoder_rebuild_raw_from_payload(instance);
 
     {
+        /* "Next press": a real rolling counter exists (raw_bytes[7] bits
+         * [6:0] << 9 | raw_bytes[8] << 1 | raw_bytes[9]'s top bit) - without
+         * advancing it, every send repeats the exact captured counter
+         * forever (same bug class fixed elsewhere this session). */
+        uint16_t cnt = (uint16_t)((((uint16_t)(instance->raw_bytes[7] & 0x7FU)) << 9) |
+                                  (((uint16_t)instance->raw_bytes[8]) << 1) |
+                                  ((uint16_t)(instance->raw_bytes[9] >> 7)));
+        uint32_t cnt32 = cnt;
+        subghz_block_generic_advance_counter(&cnt32, 0xFFFFU);
+        cnt = (uint16_t)cnt32;
+
+        instance->raw_bytes[7] =
+            (uint8_t)((instance->raw_bytes[7] & 0x80U) | ((cnt >> 9) & 0x7FU));
+        instance->raw_bytes[8] = (uint8_t)((cnt >> 1) & 0xFFU);
+        instance->raw_bytes[9] = (uint8_t)((instance->raw_bytes[9] & 0x7FU) | ((cnt & 1U) << 7));
+    }
+
+    {
         const uint8_t original_btn = instance->raw_bytes[6];
-        if(subghz_custom_btn_get_original() == 0) {
-            subghz_custom_btn_set_original(original_btn);
-        }
+        subghz_custom_btn_set_original_if_unset(original_btn);
         subghz_custom_btn_set_max(5);
         uint8_t custom_btn_id = subghz_custom_btn_get();
+        /* OK is custom_btn_get()'s default (no d-pad direction pressed yet),
+         * so it must mean "keep the captured button", same as everywhere
+         * else in this tree - previously it forced 0x10 unconditionally,
+         * meaning a plain SEND never actually replayed what was captured. */
         uint8_t new_btn = original_btn;
         switch(custom_btn_id) {
         case SUBGHZ_CUSTOM_BTN_UP:    new_btn = 0x11U; break;
-        case SUBGHZ_CUSTOM_BTN_OK:    new_btn = 0x10U; break;
         case SUBGHZ_CUSTOM_BTN_DOWN:  new_btn = 0x13U; break;
         case SUBGHZ_CUSTOM_BTN_LEFT:  new_btn = 0x14U; break;
         case SUBGHZ_CUSTOM_BTN_RIGHT: new_btn = 0x15U; break;
@@ -233,6 +252,11 @@ static SubGhzProtocolStatus
     }
 
     ford_v2_encoder_refresh_data_from_raw(instance);
+    instance->extra_data = ((uint64_t)instance->raw_bytes[8] << 32) |
+                           ((uint64_t)instance->raw_bytes[9] << 24) |
+                           ((uint64_t)instance->raw_bytes[10] << 16) |
+                           ((uint64_t)instance->raw_bytes[11] << 8) |
+                           (uint64_t)instance->raw_bytes[12];
     instance->generic.btn = instance->raw_bytes[6];
     instance->generic.serial =
         ((uint32_t)instance->raw_bytes[2] << 24) | ((uint32_t)instance->raw_bytes[3] << 16) |
@@ -306,6 +330,26 @@ SubGhzProtocolStatus
         ford_v2_encoder_deserialize_apply_repeat(instance, flipper_format);
         ford_v2_encoder_build_upload(instance);
         instance->encoder.is_running = true;
+
+        /* Persist the advanced frame back - without this, a second press in
+         * the same Transmitter session would keep re-deriving from the
+         * originally captured counter and never actually advance (same bug
+         * class fixed elsewhere this session). */
+        uint8_t key_data[FORD_V2_KEY_BYTE_COUNT];
+        for(size_t i = 0; i < FORD_V2_KEY_BYTE_COUNT; i++) {
+            key_data[i] = (uint8_t)((instance->generic.data >> (56U - i * 8U)) & 0xFFU);
+        }
+        flipper_format_rewind(flipper_format);
+        flipper_format_insert_or_update_hex(
+            flipper_format, "Key", key_data, sizeof(key_data));
+
+        uint8_t tail_raw[FORD_V2_TAIL_RAW_BYTE_COUNT];
+        for(size_t i = 0; i < FORD_V2_TAIL_RAW_BYTE_COUNT; i++) {
+            tail_raw[i] = (uint8_t)((instance->extra_data >> (32U - i * 8U)) & 0xFFU);
+        }
+        flipper_format_rewind(flipper_format);
+        flipper_format_insert_or_update_hex(
+            flipper_format, "TailRaw", tail_raw, sizeof(tail_raw));
     }
 
     furi_string_free(temp_str);

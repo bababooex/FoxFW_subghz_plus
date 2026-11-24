@@ -200,7 +200,13 @@ static void host_preset_hopper_pause(void* ctx) {
     subghz_txrx_preset_hopper_pause(((SubGhz*)ctx)->txrx);
 }
 static bool host_speaker_get_enabled(void* ctx) {
-    return subghz_txrx_speaker_get_state(((SubGhz*)ctx)->txrx) != SubGhzSpeakerStateShutdown;
+    // Only SubGhzSpeakerStateEnable is actually "on" - both SubGhzSpeakerStateDisable
+    // (the settled-off / not-yet-configured state) and SubGhzSpeakerStateShutdown
+    // (mid-turn-off) mean sound isn't playing. The old "!= Shutdown" check treated
+    // Disable as "on" too, so this settings screen could show Sound: On long after
+    // it had actually stopped (matches subghz_scene_receiver.c's and
+    // subghz_scene_decode_raw.c's own == SubGhzSpeakerStateEnable checks).
+    return subghz_txrx_speaker_get_state(((SubGhz*)ctx)->txrx) == SubGhzSpeakerStateEnable;
 }
 static void host_speaker_set_enabled(void* ctx, bool enabled) {
     subghz_txrx_speaker_set_state(

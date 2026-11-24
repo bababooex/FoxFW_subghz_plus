@@ -631,6 +631,32 @@ SubGhzProtocolStatus
         instance->generic.data_count_bit = subghz_protocol_kia_v6_const.min_count_bit_for_found;
         instance->fx_field = dec.fx_field;
 
+        /* Button remap: decode_kia_v6.c's get_string() already computes this same
+         * mapping (0x1 Lock/0x2 Unlock/0x3 Trunk/0x4 Panic) for the on-screen name,
+         * but the encoder itself never applied it - every send just replayed
+         * whatever button was in the captured file. */
+        subghz_custom_btn_set_original_if_unset(instance->generic.btn);
+        subghz_custom_btn_set_max(4);
+        uint8_t button = instance->generic.btn & 0x0FU;
+        switch(subghz_custom_btn_get()) {
+        case SUBGHZ_CUSTOM_BTN_UP:
+            button = 0x01U;
+            break;
+        case SUBGHZ_CUSTOM_BTN_DOWN:
+            button = 0x02U;
+            break;
+        case SUBGHZ_CUSTOM_BTN_LEFT:
+            button = 0x03U;
+            break;
+        case SUBGHZ_CUSTOM_BTN_RIGHT:
+            button = 0x04U;
+            break;
+        default:
+            break;
+        }
+        subghz_block_generic_global_button_override_get(&button);
+        instance->generic.btn = button;
+
         uint32_t kia_v6_txraw = 0;
         flipper_format_rewind(flipper_format);
         flipper_format_read_uint32(flipper_format, "TxRaw", &kia_v6_txraw, 1);
@@ -665,6 +691,9 @@ SubGhzProtocolStatus
         uint32_t cnt_store = instance->generic.cnt;
         flipper_format_rewind(flipper_format);
         flipper_format_insert_or_update_uint32(flipper_format, "Cnt", &cnt_store, 1);
+        uint32_t btn_store = instance->generic.btn;
+        flipper_format_rewind(flipper_format);
+        flipper_format_insert_or_update_uint32(flipper_format, "Btn", &btn_store, 1);
 
         instance->encoder.is_running = true;
         ret = SubGhzProtocolStatusOk;

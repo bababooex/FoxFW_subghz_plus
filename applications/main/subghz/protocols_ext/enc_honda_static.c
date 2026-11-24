@@ -271,6 +271,34 @@ SubGhzProtocolStatus
     }
     instance->decoded.counter = cnt & 0x00FFFFFFU;
 
+    /* Button remap: decode_honda_static.c's get_string() already computes this same
+     * mapping (honda_static_ui_button()) for the on-screen name, but the encoder
+     * itself never called subghz_custom_btn_get() - every send just replayed
+     * whatever button was in the captured file (or the "Btn" field, read above). */
+    subghz_custom_btn_set_original_if_unset(instance->decoded.button);
+    subghz_custom_btn_set_max(4);
+    {
+        uint8_t button = instance->decoded.button;
+        switch(subghz_custom_btn_get()) {
+        case SUBGHZ_CUSTOM_BTN_UP:
+            button = 0x1U;
+            break;
+        case SUBGHZ_CUSTOM_BTN_DOWN:
+            button = 0x4U;
+            break;
+        case SUBGHZ_CUSTOM_BTN_LEFT:
+            button = 0x8U;
+            break;
+        case SUBGHZ_CUSTOM_BTN_RIGHT:
+            button = 0x5U;
+            break;
+        default:
+            break;
+        }
+        subghz_block_generic_global_button_override_get(&button);
+        instance->decoded.button = button;
+    }
+
     instance->generic.serial = instance->decoded.serial;
     instance->generic.cnt = instance->decoded.counter;
     instance->generic.btn = instance->decoded.button;

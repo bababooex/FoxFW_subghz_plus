@@ -625,6 +625,19 @@ SubGhzProtocolStatus
             break;
         }
 
+        if(enc->variant == FiatVariantV5) {
+            /* Persist the advanced counter/button back - without this, the
+             * next deserialize() (another press in this session) reads the
+             * same stale "Cnt"/"Btn" above and the counter never advances
+             * past "original + mult" no matter how many times this is sent. */
+            flipper_format_rewind(flipper_format);
+            uint32_t cnt_save = enc->extra.v5.cnt;
+            flipper_format_insert_or_update_uint32(flipper_format, "Cnt", &cnt_save, 1);
+            flipper_format_rewind(flipper_format);
+            uint32_t btn_save = enc->extra.v5.btn;
+            flipper_format_insert_or_update_uint32(flipper_format, "Btn", &btn_save, 1);
+        }
+
         enc->encoder.is_running = true;
         res = SubGhzProtocolStatusOk;
 

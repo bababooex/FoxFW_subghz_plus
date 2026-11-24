@@ -432,8 +432,11 @@ void subghz_scene_receiver_on_enter(void* context) {
     subghz_txrx_rx_start(subghz->txrx);
     subghz_view_receiver_set_idx_menu(subghz->subghz_receiver, subghz->idx_menu_chosen);
 
-    furi_check(
-        subghz_txrx_load_decoder_by_name_protocol(subghz->txrx, SUBGHZ_PROTOCOL_BIN_RAW_NAME));
+    /* Not furi_check()'d: Bin Raw can be disabled (commented out of the registry) to save
+     * flash. Its only consumer below is gated on SubGhzProtocolFlag_BinRAW in subghz->filter,
+     * which can't be set without Bin Raw being registered - so a missing decoder here is
+     * harmless, not an assert-worthy condition. */
+    subghz_txrx_load_decoder_by_name_protocol(subghz->txrx, SUBGHZ_PROTOCOL_BIN_RAW_NAME);
 
     subghz_scene_receiver_update_statusbar(subghz);
 

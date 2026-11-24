@@ -98,6 +98,9 @@
 #include "renault_v1.h"
 #include "gm.h"
 #include "land_rover_v0.h"
+// Honda V2 (2026-11-22): KAT's own research says this is the real identity of what
+// land_rover_v0.c decodes - land_rover_v0 is disabled below in favor of this one.
+#include "honda_v2.h"
 #include "toyota.h"
 #include "x10.h"
 #include "ducato_v0.h"
@@ -172,3 +175,83 @@
 #include "doorbell32.h"
 #include "opel_v1.h"
 #include "bmw_cas3.h"
+#include "bmw_cas4.h"
+#include "datsun_lada.h"
+
+// Real scheme, not a guess - see vag_v1.c's header comment (24-bit LFSR
+// obfuscation, Garcia et al., USENIX Security 2016; ported from the KAT
+// project's independent re-derivation). Decode + encode.
+#include "vag_v1.h"
+
+// Ported from RogueMaster's lib/subghz/protocols/proteco.c (another Flipper
+// firmware fork), cross-checked against KAT's own re-derivation. Real
+// captures behind it (RogueMaster's unit-test .sub files). Decode + encode.
+#include "proteco.h"
+
+// Ported from RogueMaster (another Flipper firmware fork; this tree didn't
+// have them), cross-checked against KAT's own re-derivation. Decode + encode.
+#include "faac_tm.h"
+#include "freezer.h"
+
+// Ported from rtl_433 (REFERENCES/rtl_433, GPL-2.0), cross-checked against
+// KAT's own re-derivation. Decode only, as rtl_433 itself (receive only) -
+// a captured signal can still be replayed via Flipper's raw-replay.
+#include "cardin_s466.h"
+#include "chrysler_car_remote.h"
+#include "siemens_5wy72xx.h"
+
+// Ported from rtl_433, decode only, and only the chip's single most common
+// EEPROM-selected timing/mode (by deliberate scope choice - see each file's
+// header comment for the other timings this does NOT cover).
+#include "microchip_hcs361.h"
+#include "microchip_hcs362.h"
+
+// KAT's own decoders, each worked out from real recordings (not ported
+// from any other firmware or rtl_433); decode only except Volvo S40 (no
+// button field at all), Opel Rolling and Suzuki TS002 - those two also
+// have an encoder, since their "rolling" part is an obfuscation KAT fully
+// reversed (not a real cipher) - see each file's own header.
+#include "volvo_s40.h"
+#include "gm_rfa.h"
+#include "kia_denso.h"
+#include "kia_forte.h"
+#include "kia_mobis.h"
+#include "psa_two_button.h"
+#include "renault_one_button.h"
+#include "opel_rolling.h"
+#include "suzuki_ts002.h"
+#include "lexus_ux.h"
+#include "isuzu_static.h"
+#include "isuzu_rolling.h"
+
+// Ported from rtl_433, decode only. UNVALIDATED: no real capture exists
+// anywhere (not even in rtl_433's own test suite) - see the file header.
+#include "honda_kr5v2x1x.h"
+
+// EXPERIMENTAL / UNVALIDATED (2026-11-16): ported on request from the untested
+// scaffolding in auto_rke_protocols.c, decode-only, no cited source or real
+// capture behind the timing/checksum numbers. See each .c file's header
+// comment before trusting a "valid" decode from any of these four.
+#include "hkr.h"
+#include "mazda_v3.h"
+#include "subaru_rke_alt.h"
+#include "santa_fe_alt.h"
+
+// Adapted from a reference C port onto this tree's actual generic/custom-button
+// API (2026-11-21) - see each file's header for what changed. Decode + encode;
+// the rolling-code "hop" payload is cipher-unknown and carried forward
+// unchanged, like this session's other such protocols.
+#include "bmw.h"
+#include "mercedes_v1.h"
+
+// Real Toyota/Lexus "Estima" protocol (2026-11-22), ported from a reference C
+// implementation onto this tree's generic/custom-button API. Registered as
+// "Toyota Lexus" to avoid colliding with this tree's existing toyota.c ("Toyota",
+// ARF's old retired dual-variant decoder - see toyota_lexus.h's header comment).
+// Decode + encode, with real brute-force counter recovery (not cipher-unknown).
+#include "toyota_lexus.h"
+
+// Mercedes V0 (2026-11-22): a static (non-rolling), 112-bit Manchester-coded Mercedes remote
+// scheme, distinct from mercedes.c (old AM/FM KeeLoq-layout decode) and mercedes_v1.c (rolling).
+// Adapted from a reference C implementation onto this tree's API. Decode + encode.
+#include "mercedes_v0.h"

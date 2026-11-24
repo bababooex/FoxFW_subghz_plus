@@ -174,6 +174,34 @@ SubGhzProtocolStatus
         instance->generic.serial = (uint32_t)((instance->generic.data >> 20) & 0xFFFFFFFF);
         instance->generic.btn = (uint8_t)((instance->generic.data >> 16) & 0x0F);
 
+        /* Button remap: decode_kia_v2.c's get_string() already computes this same
+         * mapping (kia_v2_ui_button()) for the on-screen name, but the encoder
+         * itself never called subghz_custom_btn_get() - every send just replayed
+         * whatever button was in the captured file. */
+        subghz_custom_btn_set_original_if_unset(instance->generic.btn);
+        subghz_custom_btn_set_max(4);
+        {
+            uint8_t button = instance->generic.btn;
+            switch(subghz_custom_btn_get()) {
+            case SUBGHZ_CUSTOM_BTN_UP:
+                button = 0x1U;
+                break;
+            case SUBGHZ_CUSTOM_BTN_DOWN:
+                button = 0x2U;
+                break;
+            case SUBGHZ_CUSTOM_BTN_LEFT:
+                button = 0x3U;
+                break;
+            case SUBGHZ_CUSTOM_BTN_RIGHT:
+                button = 0x4U;
+                break;
+            default:
+                break;
+            }
+            subghz_block_generic_global_button_override_get(&button);
+            instance->generic.btn = button;
+        }
+
         uint16_t raw_count = (uint16_t)((instance->generic.data >> 4) & 0xFFF);
         instance->generic.cnt = ((raw_count >> 4) | (raw_count << 8)) & 0xFFF;
 

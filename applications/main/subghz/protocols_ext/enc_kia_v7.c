@@ -11,6 +11,7 @@
 #include <string.h>
 #include <lib/subghz/protocols/kia_v7.h>
 #include <lib/subghz/blocks/custom_btn_i.h>
+#include <lib/subghz/blocks/generic.h>
 #include <string.h>
 #include <lib/subghz/protocols/common.h>
 
@@ -334,6 +335,31 @@ SubGhzProtocolStatus
         instance->generic.btn &= 0x0FU;
         instance->generic.cnt &= 0xFFFFU;
         instance->generic.serial &= 0x0FFFFFFFU;
+
+        /* Button remap: decode_kia_v7.c's get_string() already computes this same
+         * mapping (UP=0x01/DOWN=0x02/LEFT=0x03) for the on-screen name, but the
+         * encoder itself never called subghz_custom_btn_get() - every send just
+         * replayed whatever button was in the captured file. */
+        subghz_custom_btn_set_original_if_unset(instance->generic.btn);
+        subghz_custom_btn_set_max(4);
+        {
+            uint8_t button = instance->generic.btn;
+            switch(subghz_custom_btn_get()) {
+            case SUBGHZ_CUSTOM_BTN_UP:
+                button = 0x01U;
+                break;
+            case SUBGHZ_CUSTOM_BTN_DOWN:
+                button = 0x02U;
+                break;
+            case SUBGHZ_CUSTOM_BTN_LEFT:
+                button = 0x03U;
+                break;
+            default:
+                break;
+            }
+            subghz_block_generic_global_button_override_get(&button);
+            instance->generic.btn = button & 0x0FU;
+        }
 
         uint32_t kia_v7_txraw = 0;
         flipper_format_rewind(flipper_format);

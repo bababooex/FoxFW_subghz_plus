@@ -18,6 +18,8 @@
 
 #define KEELOQ_LEARNING_SIMPLE_KINGGATES    10u
 #define KEELOQ_LEARNING_NORMAL_JAROLIFT     11u
+#define KEELOQ_LEARNING_ERREKA              12u
+#define KEELOQ_LEARNING_PUJOL               13u
 #define KEELOQ_LEARNING_AERF                14u
 #define KEELOQ_LEARNING_JCM1G               15u
 
@@ -43,3 +45,10 @@ uint64_t subghz_protocol_keeloq_common_magic_serial_type3_learning(uint32_t data
 /* AERF (type 14) device-key derivation + nl_extend-based decrypt (JCM family). */
 uint64_t subghz_protocol_keeloq_common_learning_aerf(uint32_t fix, const uint64_t key);
 uint32_t subghz_protocol_keeloq_common_decrypt_aerf(uint32_t hop, uint64_t man, uint32_t outer_limit);
+
+/* Erreka (type 12) and Pujol (type 13) device-key derivation. Both only use the
+ * existing common_decrypt primitive (no nl_extend), so neither needs the
+ * explicit shift guards that AERF's nl_extend required - see keeloq_common.c. */
+uint64_t
+    subghz_protocol_keeloq_common_learning_erreka(uint32_t fix, uint32_t seed, const uint64_t key);
+uint64_t subghz_protocol_keeloq_common_learning_pujol(uint32_t fix, const uint64_t key);

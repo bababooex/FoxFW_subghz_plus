@@ -128,3 +128,34 @@ uint64_t subghz_protocol_keeloq_common_learning_aerf(uint32_t fix, const uint64_
 uint32_t subghz_protocol_keeloq_common_decrypt_aerf(uint32_t hop, uint64_t man, uint32_t outer_limit) {
     return keeloq_common_nl_extend(hop, (uint32_t)man, (uint32_t)(man >> 32), outer_limit);
 }
+
+/* ---- Erreka (type 12) / Pujol (type 13) device-key derivation ----
+ * Both reuse the existing, safe subghz_protocol_keeloq_common_decrypt() below
+ * with the 28-bit fix marked by a distinct top-nibble tag (0x2.../0x6...)
+ * before decrypting with the manufacturer key - neither touches nl_extend,
+ * so the shift-guard concerns documented above for AERF don't apply here. */
+static uint32_t keeloq_common_word_rotate16(uint32_t v) {
+    return (v >> 16) | (v << 16);
+}
+
+uint64_t
+    subghz_protocol_keeloq_common_learning_erreka(uint32_t fix, uint32_t seed, const uint64_t key) {
+    uint32_t d = fix & 0x0FFFFFFFu;
+    uint32_t k1 = subghz_protocol_keeloq_common_decrypt(d | 0x20000000u, key);
+    uint32_t r4 = seed >> 4;
+    uint32_t r1 = (seed << 4) & 0xF000F000u;
+    r4 = (r4 & 0x0F000F00u) | r1;
+    uint32_t r5 = seed & 0x00FF00FFu;
+    uint32_t x = (r4 | r5) | 0x60000000u;
+    uint32_t k2 = subghz_protocol_keeloq_common_decrypt(x, key);
+    return ((uint64_t)k2 << 32) | k1;
+}
+
+uint64_t subghz_protocol_keeloq_common_learning_pujol(uint32_t fix, const uint64_t key) {
+    uint32_t d = fix & 0x0FFFFFFFu;
+    uint32_t w1 = subghz_protocol_keeloq_common_decrypt(d | 0x20000000u, key);
+    uint32_t w2 = subghz_protocol_keeloq_common_decrypt(d | 0x60000000u, key);
+    uint32_t k1 = keeloq_common_word_rotate16(w1);
+    uint32_t k2 = keeloq_common_word_rotate16(w2);
+    return ((uint64_t)k2 << 32) | k1;
+}

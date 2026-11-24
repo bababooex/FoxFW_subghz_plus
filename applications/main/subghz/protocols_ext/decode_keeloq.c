@@ -43,6 +43,59 @@ static const char* const keeloq_shifted_btn_brands[] = {
 
 static uint8_t keeloq_btn_get_position(const char* mfname, uint8_t btn_code);
 
+/* Direct (unshifted) mapping, confirmed per-brand - unlike the shifted list
+ * above, 0x1=Btn1, 0x2=Btn2, 0x4=Btn3, 0x8=Btn4, matching Microchip's HCS-
+ * series convention one-to-one with no offset.
+ *
+ * AN-Motors AT4: confirmed 2026-11 by capturing all 4 physical buttons on a
+ * real AT4 remote with a HackRF and round-tripping them back into a Flipper
+ * (decode -> re-encode -> decode again matched) - 0x1/0x2/0x4/0x8 = Btn1-4.
+ * The remote's fifth captured code, 0xC (bits 2+3 together), is the
+ * programming/pairing combo already assumed in subghz_protocol_keeloq_gen_data()
+ * and is intentionally NOT given a button number below (see
+ * keeloq_btn_guess_generic's comment - combo codes aren't a single button). */
+static const char* const keeloq_direct_btn_brands[] = {
+    "AN-Motors",
+};
+
+static uint8_t keeloq_btn_get_position_direct(const char* mfname, uint8_t btn_code) {
+    for(size_t i = 0; i < COUNT_OF(keeloq_direct_btn_brands); i++) {
+        if(strcmp(mfname, keeloq_direct_btn_brands[i]) == 0) {
+            switch(btn_code) {
+            case 0x1: return 1;
+            case 0x2: return 2;
+            case 0x4: return 3;
+            case 0x8: return 4;
+            default:  return 0;
+            }
+        }
+    }
+    return 0;
+}
+
+/* No manufacturer-specific mapping known: single-bit codes match Microchip's
+ * HCS200/300/301 reference encoder convention (function code = bitmask of
+ * which of up to 4 button inputs S0..S3 were pressed; a lone bit is one
+ * button, several bits set together is a combo - e.g. this firmware's own
+ * "programming mode" codes for BFT=0xF, FAAC/Monarch=0xB, Novoferm=0x9,
+ * EcoStar=0x6, AN-Motors=0xC, Cardin=0xD are all multi-bit combos of this
+ * same scheme). That only says WHICH bit is set, not which physical button
+ * that is wired to on a given remote - plenty of brands use a shifted or
+ * fully custom pinout (see keeloq_shifted_btn_brands above). Treat this as a
+ * hint to verify against a real remote, not a confirmed identification -
+ * unlike keeloq_btn_get_position, this is not empirically verified. Combo
+ * codes (more than one bit set) return 0: those are far more likely to be a
+ * manufacturer's programming/pairing shortcut than a single real button. */
+static uint8_t keeloq_btn_guess_generic(uint8_t btn_code) {
+    switch(btn_code) {
+    case 0x1: return 1;
+    case 0x2: return 2;
+    case 0x4: return 3;
+    case 0x8: return 4;
+    default:  return 0;
+    }
+}
+
 static uint8_t keeloq_btn_get_position(const char* mfname, uint8_t btn_code) {
     for(size_t i = 0; i < COUNT_OF(keeloq_shifted_btn_brands); i++) {
         if(strcmp(mfname, keeloq_shifted_btn_brands[i]) == 0) {
@@ -153,6 +206,10 @@ static void keeloq_decode(const SubGhzDecodeInput* input, FuriString* output) {
         subghz_block_generic_global.btn_length_bit = 4;
         uint8_t btn_pos =
             keeloq_btn_get_position(instance->manufacture_name, instance->generic.btn);
+        if(btn_pos == 0) {
+            btn_pos =
+                keeloq_btn_get_position_direct(instance->manufacture_name, instance->generic.btn);
+        }
         if(btn_pos > 0) {
             furi_string_cat_printf(
                 output,
@@ -172,12 +229,17 @@ static void keeloq_decode(const SubGhzDecodeInput* input, FuriString* output) {
                 (uint32_t)btn_pos,
                 instance->manufacture_name);
         } else {
+            uint8_t btn_guess = keeloq_btn_guess_generic(instance->generic.btn);
+            char btn_hint[10] = {0};
+            if(btn_guess > 0) {
+                snprintf(btn_hint, sizeof(btn_hint), "(Btn%u?)", (unsigned)btn_guess);
+            }
             furi_string_cat_printf(
                 output,
                 "%s %dbit\r\n"
                 "Key:%08lX%08lX\r\n"
                 "Fix:0x%08lX    Cnt:%04lX\r\n"
-                "Hop:0x%08lX    Btn:%01X\r\n"
+                "Hop:0x%08lX    Btn:%01X%s\r\n"
                 "MF:%s",
                 instance->generic.protocol_name,
                 instance->generic.data_count_bit,
@@ -187,6 +249,7 @@ static void keeloq_decode(const SubGhzDecodeInput* input, FuriString* output) {
                 instance->generic.cnt,
                 hopdecrypt,
                 instance->generic.btn,
+                btn_hint,
                 instance->manufacture_name);
         }
     }

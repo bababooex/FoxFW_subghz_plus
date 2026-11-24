@@ -88,10 +88,15 @@ static void fiat_v1_decode(const SubGhzDecodeInput* input, FuriString* output) {
         }
     }
 
+    /* "Sn:"/"Cnt:" (no space before the value) so the Transmitter screen's
+     * compact on-screen row (txv_after() in transmitter.c) can find them - it
+     * only looks for those literal tags, and this protocol otherwise only
+     * prints "UID:"/"Ctrl:", so the counter never showed up there at all. */
     furi_string_cat_printf(
         output,
         "%s %ubit\r\n"
         "%s\r\n"
+        "Sn:%08lX Cnt:%03lX\r\n"
         "%08lX %03lX%01X %08lX\r\n"
         "Sync:%02X UID:%08lX\r\n"
         "Btn:%02X [%s] Ctrl:%03lX\r\n"
@@ -100,6 +105,8 @@ static void fiat_v1_decode(const SubGhzDecodeInput* input, FuriString* output) {
         instance->generic.protocol_name,
         FIAT_V1_LOGICAL_BITS,
         instance->hitag2_key_valid ? "KEY:OK" : "KEY:??",
+        (unsigned long)instance->generic.serial,
+        (unsigned long)instance->generic.cnt,
         (unsigned long)instance->generic.serial,
         (unsigned long)instance->generic.cnt,
         display_btn,

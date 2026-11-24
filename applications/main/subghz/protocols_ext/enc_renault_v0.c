@@ -796,17 +796,22 @@ SubGhzProtocolStatus
             flipper_format_rewind(flipper_format);
             flipper_format_read_uint32(flipper_format, "Serial", &serial_u32, 1);
             flipper_format_rewind(flipper_format);
-            const bool got_btn = flipper_format_read_uint32(flipper_format, "Btn", &btn_u32, 1);
+            flipper_format_read_uint32(flipper_format, "Btn", &btn_u32, 1);
             flipper_format_rewind(flipper_format);
-            const bool got_cnt = flipper_format_read_uint32(flipper_format, "Cnt", &cnt_u32, 1);
+            flipper_format_read_uint32(flipper_format, "Cnt", &cnt_u32, 1);
 
-            if(!got_cnt) {
-                uint32_t mult = furi_hal_subghz_get_rolling_counter_mult();
-                if(mult == 0U) mult = 1U;
-                cnt_u32 = (cnt_u32 + mult) & 0xFFU;
-            }
+            /* These used to be gated on "the file doesn't already have a
+             * Btn/Cnt field" - but the decoder's own serialize() (and this
+             * same encoder, at the end of a successful send) always writes
+             * both, so after the very first save that guard was false
+             * forever: the counter never advanced and the d-pad never did
+             * anything, on every send after the first. Always recompute
+             * both; the default case below keeps whatever was captured. */
+            subghz_block_generic_advance_counter(&cnt_u32, 0xFFU);
 
-            if(!got_btn) {
+            {
+                const uint8_t original_btn = (uint8_t)btn_u32;
+                subghz_custom_btn_set_original_if_unset(original_btn);
                 subghz_custom_btn_set_max(4);
                 switch(subghz_custom_btn_get()) {
                 case SUBGHZ_CUSTOM_BTN_UP:
@@ -819,6 +824,7 @@ SubGhzProtocolStatus
                 case SUBGHZ_CUSTOM_BTN_LEFT:
                 case SUBGHZ_CUSTOM_BTN_RIGHT:
                 default:
+                    btn_u32 = original_btn;
                     break;
                 }
             }

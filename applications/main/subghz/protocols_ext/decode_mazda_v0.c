@@ -109,7 +109,7 @@ static void mazda_v0_decode(const SubGhzDecodeInput* input, FuriString* output) 
     uint8_t display_btn = original_btn;
     switch(subghz_custom_btn_get()) {
     case SUBGHZ_CUSTOM_BTN_UP:    display_btn = 0x1U; break;
-    case SUBGHZ_CUSTOM_BTN_OK:    display_btn = 0x2U; break;
+    case SUBGHZ_CUSTOM_BTN_LEFT:  display_btn = 0x2U; break;
     case SUBGHZ_CUSTOM_BTN_DOWN:  display_btn = 0x4U; break;
     case SUBGHZ_CUSTOM_BTN_RIGHT: display_btn = 0x8U; break;
     default:                      display_btn = original_btn; break;
@@ -121,12 +121,18 @@ static void mazda_v0_decode(const SubGhzDecodeInput* input, FuriString* output) 
                                 (uint8_t)(instance->generic.data & 0xFF) :
                                 calc_crc;
 
+    /* "Sn:"/"Cnt:" with NO space before the value, on purpose: the
+     * Transmitter screen's compact on-screen row (txv_after() in
+     * transmitter.c) finds the tag then copies up to the next whitespace -
+     * a space right after the colon means it copies nothing, so the
+     * counter/serial never show up there even though get_string() prints
+     * them fine in this full-text view. */
     furi_string_cat_printf(
         output,
         "%s %dbit CRC:%s\r\n"
         "Key: %016llX\r\n"
-        "Sn: %08lX  Btn: %02X - %s\r\n"
-        "Cnt: %05lX  Chk: %02X\r\n",
+        "Sn:%08lX  Btn: %02X - %s\r\n"
+        "Cnt:%05lX  Chk: %02X\r\n",
         instance->generic.protocol_name,
         instance->generic.data_count_bit,
         (raw_crc == calc_crc) ? "OK" : "BAD",

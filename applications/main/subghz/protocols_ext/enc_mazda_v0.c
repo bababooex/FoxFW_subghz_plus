@@ -350,7 +350,7 @@ SubGhzProtocolStatus
             uint8_t custom_btn_id = subghz_custom_btn_get();
             switch(custom_btn_id) {
             case SUBGHZ_CUSTOM_BTN_UP:    instance->generic.btn = 0x1U; break;
-            case SUBGHZ_CUSTOM_BTN_OK:    instance->generic.btn = 0x2U; break;
+            case SUBGHZ_CUSTOM_BTN_LEFT:  instance->generic.btn = 0x2U; break;
             case SUBGHZ_CUSTOM_BTN_DOWN:  instance->generic.btn = 0x4U; break;
             case SUBGHZ_CUSTOM_BTN_RIGHT: instance->generic.btn = 0x8U; break;
             default:                      instance->generic.btn = original_btn; break;
@@ -399,6 +399,21 @@ SubGhzProtocolStatus
             mazda_v0_calculate_checksum(instance->serial, instance->button, instance->count);
         flipper_format_rewind(flipper_format);
         flipper_format_insert_or_update_uint32(flipper_format, "Checksum", &chk, 1);
+
+        /* Persist the advanced Serial/Btn/Cnt back - without this, the next
+         * deserialize() (another press in this session, or Details/the
+         * saved-menu decoder, which both read these text fields rather
+         * than re-deriving from Key) would keep seeing the original
+         * captured counter forever, and the counter would never actually
+         * advance past "original + mult" no matter how many times this
+         * gets sent. */
+        flipper_format_rewind(flipper_format);
+        flipper_format_insert_or_update_uint32(flipper_format, "Serial", &instance->serial, 1);
+        uint32_t btn_save = instance->button;
+        flipper_format_rewind(flipper_format);
+        flipper_format_insert_or_update_uint32(flipper_format, "Btn", &btn_save, 1);
+        flipper_format_rewind(flipper_format);
+        flipper_format_insert_or_update_uint32(flipper_format, "Cnt", &instance->count, 1);
 
         instance->encoder.is_running = true;
 

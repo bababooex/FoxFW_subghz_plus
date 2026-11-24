@@ -398,6 +398,30 @@ SubGhzProtocolStatus
         button = HondaV1ButtonUnlock;
     }
 
+    /* Button remap: nothing in this file ever called subghz_custom_btn_get() -
+     * pressing a d-pad direction did nothing, every send just replayed whatever
+     * button was in the captured file. custom_btn_labels.c already names these
+     * four directions Unlock/Lock/Trunk/Panic, matching honda_v1_button_codes[]. */
+    subghz_custom_btn_set_original_if_unset(button);
+    subghz_custom_btn_set_max(4);
+    switch(subghz_custom_btn_get()) {
+    case SUBGHZ_CUSTOM_BTN_UP:
+        button = HondaV1ButtonUnlock;
+        break;
+    case SUBGHZ_CUSTOM_BTN_DOWN:
+        button = HondaV1ButtonLock;
+        break;
+    case SUBGHZ_CUSTOM_BTN_LEFT:
+        button = HondaV1ButtonTrunk;
+        break;
+    case SUBGHZ_CUSTOM_BTN_RIGHT:
+        button = HondaV1ButtonPanic;
+        break;
+    default:
+        break;
+    }
+    subghz_block_generic_global_button_override_get(&button);
+
     instance->generic.serial = serial;
     instance->generic.btn = button;
     instance->generic.cnt = cnt & HONDA_V1_COUNTER_MASK;

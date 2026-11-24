@@ -78,12 +78,22 @@ bool subghz_scene_transmitter_update_data_show(void* context) {
                 const char* ll = subghz_custom_btn_get_label_for_proto(pname, SUBGHZ_CUSTOM_BTN_LEFT);
                 const char* rl = subghz_custom_btn_get_label_for_proto(pname, SUBGHZ_CUSTOM_BTN_RIGHT);
 
-                furi_string_free(proto_str);
+                /* Protocol has no entry at all in the label table (e.g. generic KeeLoq,
+                 * which covers many different remotes with no single fixed button
+                 * meaning) - all four lookups come back NULL. Treat that as "all four
+                 * directions are usable, just with no specific label" rather than
+                 * "none of them work": the active flag also gates whether a d-pad
+                 * press is even accepted (see transmitter.c's dir_*_v), so leaving it
+                 * false here silently disables the whole d-pad for any untabled
+                 * protocol even when it declared custom_btn_max=4. A protocol that IS
+                 * in the table with some directions explicitly NULL (e.g. Chrysler:
+                 * Lock/Unlock only) keeps those directions disabled as before. */
+                bool proto_in_table = ul || dl || ll || rl;
 
-                bool u_active = (ul != NULL) && (strcmp(ul, clabel) != 0);
-                bool d_active = (dl != NULL) && (strcmp(dl, clabel) != 0);
-                bool l_active = (ll != NULL) && (strcmp(ll, clabel) != 0);
-                bool r_active = (rl != NULL) && (strcmp(rl, clabel) != 0);
+                bool u_active = proto_in_table ? (ul != NULL) && (strcmp(ul, clabel) != 0) : true;
+                bool d_active = proto_in_table ? (dl != NULL) && (strcmp(dl, clabel) != 0) : true;
+                bool l_active = proto_in_table ? (ll != NULL) && (strcmp(ll, clabel) != 0) : true;
+                bool r_active = proto_in_table ? (rl != NULL) && (strcmp(rl, clabel) != 0) : true;
 
                 if(!ul) ul = "^";
                 if(!dl) dl = "v";
@@ -94,6 +104,55 @@ bool subghz_scene_transmitter_update_data_show(void* context) {
                 bool d_vis = (strcmp(dl, clabel) != 0);
                 bool l_vis = (strcmp(ll, clabel) != 0);
                 bool r_vis = (strcmp(rl, clabel) != 0);
+
+                /* Generic KeeLoq has no per-protocol label above, so ul/dl/ll/rl
+                 * are still the plain arrow glyphs here - append a read-only
+                 * preview of what the existing get_btn_code() logic would send
+                 * for that direction (e.g. "<(8)"). This never touches the real
+                 * encode path (see subghz_custom_btn_keeloq_preview_code's own
+                 * comment) - worst case the hint is wrong, nothing else changes.
+                 * u_vis/u_active above are computed first and don't need to
+                 * change: the hint text still never equals clabel. */
+                char keeloq_ub[14], keeloq_db[14], keeloq_lb[14], keeloq_rb[14];
+                if(strcmp(pname, "KeeLoq") == 0) {
+                    // Note: 0 is a legitimate real button code for some KeeLoq
+                    // devices (e.g. single-function garage remotes), not just
+                    // "not read yet" - so it's not excluded here. preview_code()
+                    // handles it fine via its default cases either way.
+                    uint8_t original_btn = subghz_custom_btn_get_original();
+                    snprintf(
+                        keeloq_ub, sizeof(keeloq_ub), "%s(%X)", ul,
+                        subghz_custom_btn_keeloq_preview_code(original_btn, SUBGHZ_CUSTOM_BTN_UP));
+                    snprintf(
+                        keeloq_db, sizeof(keeloq_db), "%s(%X)", dl,
+                        subghz_custom_btn_keeloq_preview_code(
+                            original_btn, SUBGHZ_CUSTOM_BTN_DOWN));
+                    snprintf(
+                        keeloq_lb, sizeof(keeloq_lb), "%s(%X)", ll,
+                        subghz_custom_btn_keeloq_preview_code(
+                            original_btn, SUBGHZ_CUSTOM_BTN_LEFT));
+                    snprintf(
+                        keeloq_rb, sizeof(keeloq_rb), "%s(%X)", rl,
+                        subghz_custom_btn_keeloq_preview_code(
+                            original_btn, SUBGHZ_CUSTOM_BTN_RIGHT));
+                    ul = keeloq_ub;
+                    dl = keeloq_db;
+                    ll = keeloq_lb;
+                    rl = keeloq_rb;
+
+                    // Center Send has no real label either (no "Btn:[...]" bracket
+                    // text to extract for KeeLoq), so it falls back to literal
+                    // "SEND" above - replace that specific fallback with the
+                    // original captured code, same "(code)" shape as the arrows,
+                    // using a plain dot rather than a fancier glyph: unlike the
+                    // d-pad arrows (which the user already confirmed render), a
+                    // dot's glyph coverage in this font isn't verified.
+                    if(strcmp(clabel, "SEND") == 0) {
+                        snprintf(clabel, sizeof(clabel), "o(%X)", original_btn);
+                    }
+                }
+
+                furi_string_free(proto_str);
 
                 subghz_view_transmitter_set_btn_labels(
                     subghz->subghz_transmitter,

@@ -295,8 +295,13 @@ static void ford_v1_encoder_keys_from_raw(SubGhzProtocolEncoderFordV1* instance)
     instance->crc_calc = (uint16_t)(((uint16_t)raw[15] << 8) | raw[16]);
 }
 
+/* Was a stub that always returned 0 - the counter would never advance on a
+ * normal send (sum = 0 + cnt = cnt, a no-op), matching user-reported "Ford V1
+ * doesn't increment". This is the standard rolling_counter_mult step every
+ * other protocol in this tree uses. */
 static uint32_t ford_v1_encoder_preset_hop_read_stub(void) {
-    return 0;
+    int32_t mult = furi_hal_subghz_get_rolling_counter_mult();
+    return (mult <= 0) ? 1u : (uint32_t)mult;
 }
 
 static void ford_v1_encoder_apply_counter_cap(uint32_t* cnt_p, uint32_t cap) {

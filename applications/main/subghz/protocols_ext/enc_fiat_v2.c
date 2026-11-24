@@ -320,8 +320,6 @@ SubGhzProtocolStatus
     instance->generic.cnt = fiat_v2_counter(instance->raw_data);
     instance->epoch = 0U;
 
-    uint32_t override_cnt = 0U;
-    bool got_cnt = false;
     {
         uint32_t tmp = 0U;
         flipper_format_rewind(flipper_format);
@@ -330,8 +328,6 @@ SubGhzProtocolStatus
         }
         flipper_format_rewind(flipper_format);
         if(flipper_format_read_uint32(flipper_format, "Cnt", &tmp, 1)) {
-            override_cnt = tmp;
-            got_cnt = true;
             instance->generic.cnt = tmp;
         }
     }
@@ -382,14 +378,14 @@ SubGhzProtocolStatus
         const uint8_t new_selector =
             fiat_v2_dpad_selector(custom_btn_id, original_selector);
 
-        uint32_t new_counter;
-        if(got_cnt) {
-            new_counter = override_cnt;
-        } else {
-            uint32_t mult = furi_hal_subghz_get_rolling_counter_mult();
-            if(mult == 0U) mult = 1U;
-            new_counter = instance->generic.cnt + mult;
-        }
+        /* Was gated on "the file already has a Cnt field" instead of "did the
+         * user ask for a manual override" - since this same encoder (and the
+         * decoder) always write Cnt back, that made every send after the
+         * first one replay the same stored counter forever. Always advance;
+         * subghz_block_generic_advance_counter() still honours a real debug-
+         * screen override when one is set. */
+        uint32_t new_counter = instance->generic.cnt;
+        subghz_block_generic_advance_counter(&new_counter, 0x3FFU);
 
         fiat_v2_patch_button(instance->raw_data, new_selector);
         fiat_v2_patch_counter(instance->raw_data, new_counter);

@@ -393,6 +393,35 @@ SubGhzProtocolStatus
             flipper_format_insert_or_update_uint32(flipper_format, "Cnt", &cnt_store, 1);
         }
 
+        /* Button remap: decode_kia_v3_v4.c's get_string() already computes this same
+         * mapping (kia_v3_v4_ui_button()) for the on-screen name, but the encoder
+         * itself never called subghz_custom_btn_get() - every send just replayed
+         * whatever button was in the captured file. Done after mf_key selection
+         * above (which needs the ORIGINAL captured button to match the right key). */
+        subghz_custom_btn_set_original_if_unset(instance->btn);
+        subghz_custom_btn_set_max(4);
+        {
+            uint8_t button = instance->btn;
+            switch(subghz_custom_btn_get()) {
+            case SUBGHZ_CUSTOM_BTN_UP:
+                button = 0x1U;
+                break;
+            case SUBGHZ_CUSTOM_BTN_DOWN:
+                button = 0x2U;
+                break;
+            case SUBGHZ_CUSTOM_BTN_LEFT:
+                button = 0x3U;
+                break;
+            case SUBGHZ_CUSTOM_BTN_RIGHT:
+                button = 0x4U;
+                break;
+            default:
+                break;
+            }
+            subghz_block_generic_global_button_override_get(&button);
+            instance->btn = button;
+        }
+
         instance->generic.serial = instance->serial;
         instance->generic.btn = instance->btn;
         instance->generic.cnt = instance->cnt;

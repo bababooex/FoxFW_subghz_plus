@@ -39,6 +39,10 @@ uint8_t subghz_custom_btn_get_max_pages(void);
 
 const char* subghz_custom_btn_get_label_for_proto(const char* proto_name, uint8_t btn_dir);
 
+/* Read-only preview for the generic-KeeLoq d-pad label (see
+ * custom_btn_labels.c) - never touches the real encode path. */
+uint8_t subghz_custom_btn_keeloq_preview_code(uint8_t original_btn_code, uint8_t direction);
+
 void subghz_custom_btn_set_original_if_unset(uint8_t btn_code);
 void subghz_custom_btn_apply_map(
     uint8_t* btn,

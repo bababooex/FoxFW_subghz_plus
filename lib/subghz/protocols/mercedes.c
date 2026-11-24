@@ -20,7 +20,10 @@
 // this is a single protocol.
 //
 // Wire (verified against the RE bit-banger at 0x8ebc):
-//   - modulation: OOK/ASK (AM650 preset), bands 315 / 433 / 868 MHz.
+//   - modulation: OOK/ASK (AM650 preset) AND 2FSK (FM) - a real FM-preset capture
+//     (2026-11-21) of this exact 500us/112-bit frame confirmed KAT's own docs,
+//     which list this as FM; the protocol flag was AM-only and so never even
+//     got fed during an FM-mode scan - fixed below.
 //   - Manchester, Te = 500 us (te_delta ~125).
 //       * movw r0,#3700  -> 3700 us lead gap.
 //       * loop cmp r4,#55 -> 55 preamble cycles of {HIGH 500 / LOW 500}.
@@ -119,8 +122,8 @@ const SubGhzProtocol subghz_protocol_mercedes = {
     .name = MERCEDES_PROTOCOL_NAME,
     .type = SubGhzProtocolTypeDynamic,
     .flag = SubGhzProtocolFlag_315 | SubGhzProtocolFlag_433 | SubGhzProtocolFlag_868 |
-            SubGhzProtocolFlag_AM | SubGhzProtocolFlag_Decodable | SubGhzProtocolFlag_Load |
-            SubGhzProtocolFlag_Save | SubGhzProtocolFlag_Send,
+            SubGhzProtocolFlag_AM | SubGhzProtocolFlag_FM | SubGhzProtocolFlag_Decodable |
+            SubGhzProtocolFlag_Load | SubGhzProtocolFlag_Save | SubGhzProtocolFlag_Send,
     .decoder = &subghz_protocol_mercedes_decoder,
     .encoder = &subghz_protocol_mercedes_encoder_ext.vtable,
 };

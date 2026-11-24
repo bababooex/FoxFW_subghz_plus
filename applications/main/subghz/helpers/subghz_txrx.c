@@ -918,9 +918,14 @@ void subghz_txrx_speaker_on(SubGhzTxRx* instance) {
             if(!instance->debug_pin_state) {
                 subghz_devices_set_async_mirror_pin(instance->radio_device, &gpio_speaker);
             }
-        } else {
-            instance->speaker_state = SubGhzSpeakerStateDisable;
         }
+        // A failed acquire (e.g. a transient collision with some other short
+        // sound) used to permanently downgrade speaker_state to Disable here.
+        // That stuck silently - the Sound toggle in settings only checks for
+        // Shutdown, so it kept showing "On" while nothing played, until the
+        // user manually flipped it off and back on. Leave speaker_state as
+        // Enable so the next subghz_txrx_speaker_on() call (next RX start/
+        // frequency hop) just retries instead of staying disabled forever.
     }
 }
 
